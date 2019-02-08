@@ -495,7 +495,7 @@ drawing has finished. This may allow the hardware to perform additional
 optimizations. Just like the color buffer, we don't care about the previous
 depth contents, so we can use `VK_IMAGE_LAYOUT_UNDEFINED` as `initialLayout`.
 
-`format`은 깊이 이미지 자체와 동일해야합니다. 이번에는 드로잉이 끝난 후에 사 용되지 않기 때문에 
+`format`은 깊이 이미지 자체와 동일해야 합니다. 이번에는 드로잉이 끝난 후에 사용되지 않기 때문에 
 depth data (`storeOp`)를 저장하는 것에 신경 쓰지 않습니다.
 이로 인해 하드웨어가 추가 최적화를 수행 할 수 있습니다.
 색상 버퍼와 마찬가지로 이전의 깊이 내용을 신경 쓰지 않으므로 
@@ -523,7 +523,7 @@ Unlike color attachments, a subpass can only use a single depth (+stencil)
 attachment. It wouldn't really make any sense to do depth tests on multiple
 buffers.
 
-색상 첨부와 달리 하위 패스는 하나의 깊이 (+ 스텐실) 첨부 파일 만 사용할 수 있습니다. 
+색상 첨부와 달리 하위 패스는 하나의 깊이 (+스텐실) 첨부 파일만 사용할 수 있습니다. 
 여러 버퍼에서 깊이 테스트를 수행하는 것은 실제로 의미가 없습니다.
 
 ```c++
@@ -572,8 +572,14 @@ The color attachment differs for every swap chain image, but the same depth
 image can be used by all of them because only a single subpass is running at the
 same time due to our semaphores.
 
+색상 첨부는 모든 스왑 체인 이미지마다 다르지만, 
+우리의 세마포어 때문에 하나의 서브 패스만 동시에 실행되기 때문에 동일한 깊이 이미지를 사용할 수 있습니다.
+
 You'll also need to move the call to `createFramebuffers` to make sure that it
 is called after the depth image view has actually been created:
+
+depth image view가 실제로 생성 된 후에 호출되도록 하려면 
+`createFramebuffers`로 호출을 이동해야합니다.
 
 ```c++
 void initVulkan() {
@@ -590,6 +596,10 @@ Because we now have multiple attachments with `VK_ATTACHMENT_LOAD_OP_CLEAR`, we
 also need to specify multiple clear values. Go to `createCommandBuffers` and
 create an array of `VkClearValue` structs:
 
+우리는 이제 `VK_ATTACHMENT_LOAD_OP_CLEAR`가 있는 첨부 파일을 
+여러 개 가지고 있기 때문에 여러 개의 명확한 값을 지정해야합니다. 
+`createCommandBuffers`로 가서 `VkClearValue` 구조체의 배열을 만듭니다 :
+
 ```c++
 std::array<VkClearValue, 2> clearValues = {};
 clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -604,11 +614,18 @@ lies at the far view plane and `0.0` at the near view plane. The initial value
 at each point in the depth buffer should be the furthest possible depth, which
 is `1.0`.
 
+깊이 버퍼의 깊이 범위는 Vulkan에서 `0.0`에서 `1.0`까지이며, 
+여기서 1.0은 원거리 뷰 평면에 있고 0.0은 근거리 뷰 평면에 있습니다. 
+깊이 버퍼의 각 지점에서의 초기 값은 가능한 가장 먼 깊이 인 `1.0`이어야 합니다.
+
 ## Depth and stencil state
 
 The depth attachment is ready to be used now, but depth testing still needs to
 be enabled in the graphics pipeline. It is configured through the
 `VkPipelineDepthStencilStateCreateInfo` struct:
+
+depth attachment는 이제 사용할 준비가되었지만 여전히 그래픽 파이프 라인에서 깊이 테스트를 활성화해야 합니다. 
+그것은 `VkPipelineDepthStencilStateCreateInfo` 구조체를 통해 설정됩니다 :
 
 ```c++
 VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -624,6 +641,10 @@ depth test should actually be written to the depth buffer. This is useful for
 drawing transparent objects. They should be compared to the previously rendered
 opaque objects, but not cause further away transparent objects to not be drawn.
 
+`depthTestEnable` 필드는 새 프래그먼트의 depth를 depth buffer와 비교하여 버려야 하는지 확인하기 위해 지정합니다. 
+`depthWriteEnable` 필드는 깊이 테스트를 통과 한 새로운 프래그먼트 depth가 depth buffer에 실제로 기록되어야 하는지를 지정합니다. 
+투명 오브젝트를 그릴때 유용합니다. 그것들은 이전에 렌더링된 불투명 한 객체와 비교되어야 하지만 멀리 떨어진 투명 객체는 그려지지 않습니다.
+
 ```c++
 depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 ```
@@ -631,6 +652,9 @@ depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 The `depthCompareOp` field specifies the comparison that is performed to keep or
 discard fragments. We're sticking to the convention of lower depth = closer, so
 the depth of new fragments should be *less*.
+
+`depthCompareOp` 필드는 프래그먼트를 유지하거나 버리기 위해 수행되는 비교를 지정합니다. 
+우리는 더 낮은 깊이의 관습을 고수하고 있습니다. 따라서 새로운 조각의 깊이는 더 *작아* 져야합니다.
 
 ```c++
 depthStencil.depthBoundsTestEnable = VK_FALSE;
@@ -643,6 +667,9 @@ used for the optional depth bound test. Basically, this allows you to only keep
 fragments that fall within the specified depth range. We won't be using this
 functionality.
 
+`depthBoundsTestEnable`, `minDepthBounds` 및 `maxDepthBounds` 필드는 선택적 깊이 바인딩 테스트에 사용됩니다. 
+기본적으로 이것은 지정된 깊이 범위 내에있는 프래그먼트만 유지할 수 있습니다. 우리는 이 기능을 사용하지 않을 것입니다.
+
 ```c++
 depthStencil.stencilTestEnable = VK_FALSE;
 depthStencil.front = {}; // Optional
@@ -654,6 +681,9 @@ be using in this tutorial. If you want to use these operations, then you will
 have to make sure that the format of the depth/stencil image contains a stencil
 component.
 
+마지막 세 필드는 스텐실 버퍼 작업을 구성합니다. 이 튜토리얼에서는 사용하지 않을 것입니다. 
+이러한 작업을 사용하려면 깊이/스텐실 이미지의 형식에 스텐실 구성 요소가 포함되어 있는지 확인해야 합니다.
+
 ```c++
 pipelineInfo.pDepthStencilState = &depthStencil;
 ```
@@ -662,8 +692,13 @@ Update the `VkGraphicsPipelineCreateInfo` struct to reference the depth stencil
 state we just filled in. A depth stencil state must always be specified if the
 render pass contains a depth stencil attachment.
 
+방금 채운 깊이 스텐실 상태를 참조하도록 `VkGraphicsPipelineCreateInfo` 구조체를 업데이트하십시오. 
+렌더패스에 깊이 스텐실 첨부가 포함되어 있는 경우에는 반드시 스텐실 상태를 지정해야합니다.
+
 If you run your program now, then you should see that the fragments of the
 geometry are now correctly ordered:
+
+프로그램을 지금 실행하면 지오메트리의 조각이 올바르게 정렬되어 있어야합니다.
 
 ![](/images/depth_correct.png)
 
@@ -672,6 +707,9 @@ geometry are now correctly ordered:
 The resolution of the depth buffer should change when the window is resized to
 match the new color attachment resolution. Extend the `recreateSwapChain`
 function to recreate the depth resources in that case:
+
+깊이 버퍼의 해상도는 창을 새 색상 부착 해상도와 일치 하도록 크기를 조정할 때 변경해야 합니다. 
+`recreateSwapChain` 함수를 확장하여 깊이 자원을 다시 생성하십시오 :
 
 ```c++
 void recreateSwapChain() {
@@ -691,6 +729,8 @@ void recreateSwapChain() {
 
 The cleanup operations should happen in the swap chain cleanup function:
 
+정리 작업은 스왑 체인 정리 기능에서 수행되어야합니다.
+
 ```c++
 void cleanupSwapChain() {
     vkDestroyImageView(device, depthImageView, nullptr);
@@ -704,6 +744,10 @@ void cleanupSwapChain() {
 Congratulations, your application is now finally ready to render arbitrary 3D
 geometry and have it look right. We're going to try this out in the next chapter
 by drawing a textured model!
+
+축하합니다. 이제 응용 프로그램이 마침내 임의의 3D 지오메트리를 렌더링하고 
+올바른 모양으로 렌더링 할 준비가되었습니다. 
+텍스처 모델을 그리는 것으로 다음 장에서 이것을 시도 할 것입니다!
 
 [C++ code](/code/26_depth_buffering.cpp) /
 [Vertex shader](/code/26_shader_depth.vert) /
